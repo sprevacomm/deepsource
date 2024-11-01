@@ -1,0 +1,53 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: dns-netpol
+  annotations:
+    policies.kyverno.io/title: "Allow DNS Resolution Network Policy"
+    policies.kyverno.io/category: "Network Policy"
+    policies.kyverno.io/severity: "high"
+    policies.kyverno.io/description: >-
+      Automatically generates NetworkPolicies to allow DNS resolution for all namespaces 
+      (except kube-system and amazon-cloudwatch). Enables both TCP and UDP DNS queries 
+      to kube-system namespace where CoreDNS typically runs. This policy is essential 
+      for basic pod-to-service communication and external name resolution.
+    policies.kyverno.io/subject: "NetworkPolicy"
+    policies.kyverno.io/minversion: "1.13.0"
+    policies.kyverno.io/netpolversion: "1.0.1"
+spec:
+  rules:
+    - name: add-dns-netpol
+      match:
+        any:
+        - resources:
+            kinds:
+              - Namespace
+      preconditions:
+        any:
+        - key: "{{request.object.metadata.name}}"
+          operator: NotIn
+          value: 
+            - kube-system
+            - amazon-cloudwatch
+      generate:
+        generateExisting: true
+        apiVersion: networking.k8s.io/v1
+        kind: NetworkPolicy
+        name: allow-dns-netpol
+        namespace: "{{request.object.metadata.name}}"
+        synchronize: true
+        data:
+          spec:
+            podSelector: {}
+            policyTypes:
+              - Egress
+            egress:
+              - ports:
+                  - port: 53
+                    protocol: UDP
+                  - port: 53
+                    protocol: TCP
+                to:
+                  - namespaceSelector:
+                      matchLabels:
+                        kubernetes.io/metadata.name: kube-system

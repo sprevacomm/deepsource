@@ -1,0 +1,97 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: sonarqube-netpol
+  annotations:
+    policies.kyverno.io/title: "SonarQube Network Policy"
+    policies.kyverno.io/category: "Network Policy"
+    policies.kyverno.io/severity: "high"
+    policies.kyverno.io/description: >-
+      Automatically generates a NetworkPolicy for the SonarQube namespace. Controls ingress access 
+      through NGINX ingress controller, Jenkins integration, and external management access (port 9000). 
+      Manages egress for DNS resolution, Elasticsearch communication (ports 9200/9300), and external 
+      HTTPS calls while explicitly blocking AWS metadata access. This policy ensures secure code 
+      quality analysis operations while maintaining CI/CD pipeline integration capabilities.
+    policies.kyverno.io/subject: "NetworkPolicy"
+    policies.kyverno.io/minversion: "1.13.0"
+    policies.kyverno.io/policyversion: "1.0.1"
+spec:
+  rules:
+    - name: add-sonarqube-netpol
+      match:
+        any:
+        - resources:
+            kinds:
+              - Namespace
+      preconditions:
+        any:
+        - key: "{{request.object.metadata.name}}"
+          operator: Equals
+          value: "sonarqube"
+      generate:
+        generateExisting: true
+        apiVersion: networking.k8s.io/v1
+        kind: NetworkPolicy
+        name: sonarqube-netpol
+        namespace: "{{request.object.metadata.name}}"
+        synchronize: true
+        data:
+          spec:
+            podSelector: {}
+            policyTypes:
+              - Ingress
+              - Egress
+            ingress:
+              # Allow ingress controller with specific port
+              - ports:
+                  - port: 9000
+                    protocol: TCP
+                from:
+                  - namespaceSelector:
+                      matchLabels:
+                        kubernetes.io/metadata.name: ingress-nginx
+              # Allow Jenkins communication with specific port
+              - ports:
+                  - port: 9000
+                    protocol: TCP
+                from:
+                  - namespaceSelector:
+                      matchLabels:
+                        kubernetes.io/metadata.name: jenkins
+              # Allow external management access with specific port
+              - ports:
+                  - port: 9000
+                    protocol: TCP
+                from:
+                  - ipBlock:
+                      cidr: "0.0.0.0/0"
+            egress:
+              # Allow DNS resolution
+              - ports:
+                  - port: 53
+                    protocol: UDP
+                  - port: 53
+                    protocol: TCP
+                to:
+                  - namespaceSelector:
+                      matchLabels:
+                        kubernetes.io/metadata.name: kube-system
+              # Allow Elasticsearch communication
+              - ports:
+                  - port: 9200
+                    protocol: TCP
+                  - port: 9300
+                    protocol: TCP
+                to:
+                  - podSelector:
+                      matchLabels:
+                        app: elasticsearch
+              # Allow SonarQube to make external calls with restrictions
+              - ports:
+                  - port: 443
+                    protocol: TCP
+                to:
+                  - ipBlock:
+                      cidr: "0.0.0.0/0"
+                      except:
+                        - "169.254.169.254/32"  # Block AWS metadata endpoint

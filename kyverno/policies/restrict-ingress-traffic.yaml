@@ -1,0 +1,38 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: restrict-ingress-traffic
+  annotations:
+    policies.kyverno.io/title: "Restrict Ingress Traffic"
+    policies.kyverno.io/category: "Network Security Standards"
+    policies.kyverno.io/severity: "high"
+    policies.kyverno.io/description: >-
+      Ensures all ingress traffic is explicitly allowed through NetworkPolicies. 
+      Prevents unauthorized network access to pods by requiring explicit ingress rules.
+      Excludes default deny NetworkPolicies that intentionally block all traffic.
+    policies.kyverno.io/subject: "NetworkPolicy"
+    policies.kyverno.io/minversion: "1.13.0"
+    policies.kyverno.io/policyversion: "1.0.1"
+spec:
+  validationFailureAction: audit
+  background: true
+  rules:
+    - name: check-ingress-rules
+      match:
+        any:
+        - resources:
+            kinds:
+              - NetworkPolicy
+      preconditions:
+        all:
+        - key: "{{request.object.metadata.name}}"
+          operator: NotIn
+          value: 
+            - default-deny-all-netpol
+            - allow-dns-netpol
+      validate:
+        message: "NetworkPolicy must specify ingress rules."
+        pattern:
+          spec:
+            ingress:
+              - {}

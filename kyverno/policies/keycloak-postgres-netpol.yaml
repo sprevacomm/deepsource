@@ -1,0 +1,53 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: keycloak-postgres-netpol
+  annotations:
+    policies.kyverno.io/title: "Keycloak PostgreSQL Network Policy"
+    policies.kyverno.io/category: "Network Policy"
+    policies.kyverno.io/severity: "high"
+    policies.kyverno.io/description: >-
+      Automatically generates a NetworkPolicy for the Keycloak PostgreSQL database. 
+      Restricts database access to port 5432 with TCP protocol, ensuring only authorized 
+      Keycloak pods can connect to the database. Allows unrestricted egress for database 
+      operations. This policy is crucial for protecting sensitive identity and authentication 
+      data stored in Keycloak's database.
+    policies.kyverno.io/subject: "NetworkPolicy"
+    policies.kyverno.io/minversion: "1.13.0"
+    policies.kyverno.io/netpolversion: "1.0.1"
+spec:
+  rules:
+    - name: add-postgres-netpol
+      match:
+        any:
+        - resources:
+            kinds:
+              - Namespace
+      preconditions:
+        any:
+        - key: "{{request.object.metadata.name}}"
+          operator: Equals
+          value: "keycloak"
+      generate:
+        generateExisting: true
+        apiVersion: networking.k8s.io/v1
+        kind: NetworkPolicy
+        name: keycloak-postgresql-netpol
+        namespace: "{{request.object.metadata.name}}"
+        synchronize: true
+        data:
+          spec:
+            podSelector:
+              matchLabels:
+                app.kubernetes.io/component: primary
+                app.kubernetes.io/instance: keycloak
+                app.kubernetes.io/name: postgresql 
+            policyTypes:
+              - Ingress
+              - Egress           
+            ingress:
+              - ports:
+                - port: 5432
+                  protocol: TCP
+            egress:
+              - {}

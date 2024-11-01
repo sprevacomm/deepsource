@@ -1,0 +1,65 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: ingress-nginx-netpol
+  annotations:
+    policies.kyverno.io/title: "Ingress NGINX Network Policy"
+    policies.kyverno.io/category: "Network Policy"
+    policies.kyverno.io/severity: "high"
+    policies.kyverno.io/description: >-
+      Automatically generates a NetworkPolicy for the ingress-nginx namespace. Allows incoming HTTP/HTTPS 
+      traffic from all sources (0.0.0.0/0) and enables outbound traffic to all cluster services on 
+      standard HTTP/HTTPS ports (80/443) and application-specific ports (8080/9000). This policy is 
+      essential for the ingress controller to function as the primary entry point for cluster services.
+    policies.kyverno.io/subject: "NetworkPolicy"
+    policies.kyverno.io/minversion: "1.13.0"
+    policies.kyverno.io/netpolversion: "1.0.1"
+spec:
+  rules:
+    - name: add-ingress-nginx-netpol
+      match:
+        any:
+        - resources:
+            kinds:
+              - Namespace
+      preconditions:
+        any:
+        - key: "{{request.object.metadata.name}}"
+          operator: Equals
+          value: "ingress-nginx"
+      generate:
+        generateExisting: true
+        apiVersion: networking.k8s.io/v1
+        kind: NetworkPolicy
+        name: ingress-nginx-netpol
+        namespace: "{{request.object.metadata.name}}"
+        synchronize: true
+        data:
+          spec:
+            podSelector: {}
+            policyTypes:
+              - Ingress
+              - Egress
+            ingress:
+              # Allow all incoming traffic
+              - ports:
+                  - port: 80
+                    protocol: TCP
+                  - port: 443
+                    protocol: TCP
+                from:
+                  - ipBlock:
+                      cidr: 0.0.0.0/0
+            egress:
+              # Allow access to all namespaces
+              - ports:
+                  - port: 80
+                    protocol: TCP
+                  - port: 443
+                    protocol: TCP
+                  - port: 8080
+                    protocol: TCP
+                  - port: 9000
+                    protocol: TCP
+                to:
+                  - namespaceSelector: {}

@@ -1,0 +1,73 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: cert-mgr-netpol
+  annotations:
+    policies.kyverno.io/title: "Cert-Manager Network Policy"
+    policies.kyverno.io/category: "Network Policy"
+    policies.kyverno.io/severity: "high"
+    policies.kyverno.io/description: >-
+      Automatically generates a NetworkPolicy for the cert-manager namespace. Controls ingress for metrics 
+      collection from kube-system, and manages egress for ACME certificate challenges, DNS resolution, 
+      and webhook communications with the Kubernetes API server.
+    policies.kyverno.io/subject: "NetworkPolicy"
+    policies.kyverno.io/minversion: "1.13.0"
+    policies.kyverno.io/netpolversion: "1.0.1"
+spec:
+  rules:
+    - name: add-cert-manager-netpol
+      match:
+        any:
+        - resources:
+            kinds:
+              - Namespace
+      preconditions:
+        any:
+        - key: "{{request.object.metadata.name}}"
+          operator: Equals
+          value: "cert-manager"
+      generate:
+        generateExisting: true
+        apiVersion: networking.k8s.io/v1
+        kind: NetworkPolicy
+        name: cert-manager-netpol
+        namespace: "{{request.object.metadata.name}}"
+        synchronize: true
+        data:
+          spec:
+            podSelector: {}
+            policyTypes:
+              - Ingress
+              - Egress
+            ingress:
+              - from:
+                  - namespaceSelector:
+                      matchLabels:
+                        kubernetes.io/metadata.name: kube-system
+                ports:
+                  - port: 9402
+                    protocol: TCP
+            egress:
+              # Allow ACME challenges
+              - ports:
+                  - port: 443
+                    protocol: TCP
+                to:
+                  - ipBlock:
+                      cidr: 0.0.0.0/0
+              # Allow DNS
+              - ports:
+                  - port: 53
+                    protocol: UDP
+                  - port: 53
+                    protocol: TCP
+                to:
+                  - namespaceSelector:
+                      matchLabels:
+                        kubernetes.io/metadata.name: kube-system
+              # Allow webhook communication
+              - ports:
+                  - port: 443
+                    protocol: TCP
+                to:
+                  - namespaceSelector: {}

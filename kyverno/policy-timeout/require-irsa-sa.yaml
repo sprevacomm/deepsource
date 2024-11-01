@@ -1,0 +1,45 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-irsa-sa
+  annotations:
+    policies.kyverno.io/title: "Require IRSA for all non-system ServiceAccounts"
+    policies.kyverno.io/category: "Access Control Standards"
+    policies.kyverno.io/severity: "high"
+    policies.kyverno.io/description: >-
+      Requires all non-system ServiceAccounts to use IRSA for potential AWS access.
+    policies.kyverno.io/subject: "ServiceAccount"
+    policies.kyverno.io/minversion: "1.13.0"
+    policies.kyverno.io/netpolversion: "1.0.1"
+
+spec:
+  validationFailureAction: audit
+  background: true
+  rules:
+    - name: check-irsa-configuration
+      match:
+        any:
+        - resources:
+            kinds:
+              - ServiceAccount
+      exclude:
+        any:
+        - resources:
+            names:
+              - "default"
+              - "kube-proxy"
+              - "coredns"
+              - "aws-node"
+            namespaces:
+              - "kube-system"
+              - "kube-public"
+              - "kube-node-lease"
+          resourceFilters:
+            - matchLabels:
+                no-irsa: "true"  # opt-out label
+      validate:
+        message: "All custom ServiceAccounts must be configured with IRSA. Add the 'eks.amazonaws.com/role-arn' annotation with a valid IAM role ARN."
+        pattern:
+          metadata:
+            annotations:
+              eks.amazonaws.com/role-arn: "arn:aws:iam::*:role/*"

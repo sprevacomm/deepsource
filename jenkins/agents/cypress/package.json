@@ -1,0 +1,24 @@
+{
+  "name": "cypress_tests",
+  "version": "1.0.0",
+  "description": "e2e, accessibility, performance tests",
+  "scripts": {
+    "cy:run": "cypress run",
+    "cy:open": "cypress open",
+    "test:e2e": "cypress run --spec 'cypress/e2e/**/*.cy.js'",
+    "test:a11y": "cypress run --spec 'cypress/accessibility/**/*.cy.js'",
+    "test:performance": "cypress run --spec 'cypress/performance/**/*.cy.js'"
+  },
+  "devDependencies": {
+    "@cypress/react": "^7.0.3",
+    "@testing-library/cypress": "^10.0.1",
+    "cypress-audit": "^1.0.0",
+    "cypress-axe": "^1.5.0",
+    "mochawesome": "^7.1.3",
+    "mochawesome-merge": "^4.3.0",
+    "mochawesome-report-generator": "^6.2.0"
+  },
+  "dependencies": {
+    "cypress": "^13.15.1"
+  }
+}

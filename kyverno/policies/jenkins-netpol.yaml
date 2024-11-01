@@ -1,0 +1,96 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: jenkins-netpol
+  annotations:
+    policies.kyverno.io/title: "Jenkins Network Policy"
+    policies.kyverno.io/category: "Network Policy"
+    policies.kyverno.io/severity: "high"
+    policies.kyverno.io/description: >-
+      Automatically generates a NetworkPolicy for the Jenkins namespace. Controls ingress access 
+      from the NGINX ingress controller (port 8080) and Jenkins agents (port 50000). Manages egress 
+      for Jenkins agent communication, ECR access, SonarQube integration, and deployments to 
+      application namespaces (dev/stage/prod). This policy ensures secure CI/CD pipeline operations 
+      while maintaining necessary isolation.
+    policies.kyverno.io/subject: "NetworkPolicy"
+    policies.kyverno.io/minversion: "1.13.0"
+    policies.kyverno.io/netpolversion: "1.0.1"
+spec:
+  rules:
+    - name: add-jenkins-netpol
+      match:
+        any:
+        - resources:
+            kinds:
+              - Namespace
+      preconditions:
+        any:
+        - key: "{{request.object.metadata.name}}"
+          operator: Equals
+          value: "jenkins"
+      generate:
+        generateExisting: true
+        apiVersion: networking.k8s.io/v1
+        kind: NetworkPolicy
+        name: jenkins-netpol
+        namespace: "{{request.object.metadata.name}}"
+        synchronize: true
+        data:
+          spec:
+            podSelector: {}
+            policyTypes:
+              - Ingress
+              - Egress
+            ingress:
+              # Allow ingress controller
+              - ports:
+                  - port: 8080
+                    protocol: TCP
+                from:
+                  - namespaceSelector:
+                      matchLabels:
+                        kubernetes.io/metadata.name: ingress-nginx
+              # Allow agent communication
+              - ports:
+                  - port: 50000
+                    protocol: TCP
+                from:
+                  - podSelector:
+                      matchLabels:
+                        jenkins/jenkins-agent: "true"
+            egress:
+              # Allow agent communication
+              - to:
+                  - podSelector:
+                      matchLabels:
+                        jenkins/jenkins-agent: "true"
+              # Allow ECR access
+              - ports:
+                  - port: 443
+                    protocol: TCP
+                to:
+                  - ipBlock:
+                      cidr: 0.0.0.0/0
+              # Allow SonarQube communication
+              - ports:
+                  - port: 9000
+                    protocol: TCP
+                to:
+                  - namespaceSelector:
+                      matchLabels:
+                        kubernetes.io/metadata.name: sonarqube
+              # Allow deployment to app namespaces
+              - ports:
+                  - port: 80
+                    protocol: TCP
+                  - port: 443
+                    protocol: TCP
+                to:
+                  - namespaceSelector:
+                      matchExpressions:
+                        - key: kubernetes.io/metadata.name
+                          operator: In
+                          values:
+                            - dev
+                            - stage
+                            - prod

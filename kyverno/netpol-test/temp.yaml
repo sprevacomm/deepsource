@@ -1,0 +1,62 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-network-policy
+  annotations:
+    policies.kyverno.io/title: "Require Network Policy"
+    policies.kyverno.io/category: "Pod Security Standards"
+    policies.kyverno.io/severity: "medium"
+    policies.kyverno.io/description: >-
+      Requires each namespace to have a default-deny network policy to ensure 
+      network access is explicitly granted. This helps maintain a secure-by-default 
+      network posture.
+spec:
+  validationFailureAction: enforce
+  background: true
+  rules:
+    - name: check-netpol-exists
+      match:
+        any:
+        - resources:
+            kinds:
+              - Namespace
+      validate:
+        message: "Every namespace must have a default-deny NetworkPolicy."
+        foreach:
+        - list: request.object.metadata.name
+          pattern: "?*"
+          deny:
+            conditions:
+              all:
+              - key: "{{ resource_name := element.0 }}"
+                operator: NotIn
+                value: "{{ kube_get_items('networking.k8s.io/v1', 'NetworkPolicy', resource_name) }}"
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: validate-netpol-selectors
+  annotations:
+    policies.kyverno.io/title: "Validate NetworkPolicy Selectors"
+    policies.kyverno.io/category: "Network Security"
+    policies.kyverno.io/severity: "medium"
+    policies.kyverno.io/description: >-
+      Ensures NetworkPolicies use proper pod and namespace selectors to maintain 
+      precise network segmentation and avoid overly permissive policies.
+spec:
+  validationFailureAction: enforce
+  background: true
+  rules:
+    - name: check-selectors
+      match:
+        any:
+        - resources:
+            kinds:
+              - NetworkPolicy
+      validate:
+        message: "NetworkPolicy must have podSelector and optional namespaceSelector defined."
+        pattern:
+          spec:
+            podSelector:
+              matchLabels:
+                "?*": "?*"

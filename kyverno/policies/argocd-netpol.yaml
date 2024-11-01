@@ -1,0 +1,116 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: argocd-netpol
+  annotations:
+    policies.kyverno.io/title: "ArgoCD Network Policy"
+    policies.kyverno.io/category: "Network Policy"
+    policies.kyverno.io/severity: "high"
+    policies.kyverno.io/description: >-
+      Automatically generates a NetworkPolicy for the ArgoCD namespace. Controls ingress for API server, 
+      web UI, and metrics endpoints. Manages egress for Git repositories, DNS resolution, internal ArgoCD 
+      component communication, and cluster webhook interactions.
+    policies.kyverno.io/subject: "NetworkPolicy"
+    policies.kyverno.io/minversion: "1.13.0"
+    policies.kyverno.io/netpolversion: "1.0.0"
+spec:
+  rules:
+    - name: add-argocd-netpol
+      match:
+        any:
+        - resources:
+            kinds:
+              - Namespace
+      preconditions:
+        any:
+        - key: "{{request.object.metadata.name}}"
+          operator: Equals
+          value: "argocd"
+      generate:
+        generateExisting: true
+        apiVersion: networking.k8s.io/v1
+        kind: NetworkPolicy
+        name: argocd-netpol
+        namespace: "{{request.object.metadata.name}}"
+        synchronize: true
+        data:
+          spec:
+            podSelector: {}
+            policyTypes:
+              - Ingress
+              - Egress
+            ingress:
+              # Allow inbound traffic to API server (gRPC)
+              - from:
+                  - namespaceSelector:
+                      matchLabels:
+                        kubernetes.io/metadata.name: argocd
+                ports:
+                  - port: 8080
+                    protocol: TCP
+                  - port: 8083
+                    protocol: TCP
+              # Allow inbound traffic to web UI and API
+              - from:
+                  - namespaceSelector:
+                      matchLabels:
+                        kubernetes.io/metadata.name: argocd
+                ports:
+                  - port: 443
+                    protocol: TCP
+                  - port: 80
+                    protocol: TCP
+              # Allow inbound metrics scraping
+              - from:
+                  - namespaceSelector:
+                      matchLabels:
+                        kubernetes.io/metadata.name: argocd
+                ports:
+                  - port: 8082
+                    protocol: TCP
+            egress:
+              # Allow outbound to Git repositories
+              - ports:
+                  - port: 443
+                    protocol: TCP
+                  - port: 80
+                    protocol: TCP
+                to:
+                  - ipBlock:
+                      cidr: 0.0.0.0/0
+              # Allow DNS resolution
+              - ports:
+                  - port: 53
+                    protocol: UDP
+                  - port: 53
+                    protocol: TCP
+                to:
+                  - namespaceSelector:
+                      matchLabels:
+                        kubernetes.io/metadata.name: kube-system
+              # Allow internal ArgoCD communication
+              - ports:
+                  # Redis
+                  - port: 6379
+                    protocol: TCP
+                  # Repository Server
+                  - port: 8081
+                    protocol: TCP
+                  # Application Controller
+                  - port: 8082
+                    protocol: TCP
+                  # API Server
+                  - port: 8080
+                    protocol: TCP
+                to:
+                  - namespaceSelector:
+                      matchLabels:
+                        kubernetes.io/metadata.name: argocd
+              # Allow webhook communications with clusters
+              - ports:
+                  - port: 443
+                    protocol: TCP
+                  - port: 6443
+                    protocol: TCP
+                to:
+                  - namespaceSelector: {}

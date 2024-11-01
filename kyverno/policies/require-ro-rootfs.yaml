@@ -1,0 +1,41 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-ro-rootfs
+  annotations:
+    policies.kyverno.io/title: "Require Read-Only Root Filesystem"
+    policies.kyverno.io/category: "Pod Security Standards"
+    policies.kyverno.io/severity: "high"
+    policies.kyverno.io/description: >-
+      Enforces read-only root filesystems for containers to prevent runtime 
+      modifications, reduce attack surface, and follow security best practices. 
+      This helps prevent malicious actors from modifying the container filesystem 
+      during runtime.
+    policies.kyverno.io/subject: "Pod"
+    policies.kyverno.io/minversion: "1.13.0"
+    policies.kyverno.io/policyversion: "1.0.1"
+spec:
+  validationFailureAction: audit
+  background: true
+  rules:
+    - name: check-rootfs
+      match:
+        resources:
+          kinds:
+          - Pod
+          - Deployment
+          - StatefulSet
+          - DaemonSet
+          - Job
+          - CronJob
+      validate:
+        message: "Root filesystem must be read-only. Set readOnlyRootFilesystem: true in container security context."
+        pattern:
+          spec:
+            # Apply to init containers
+            =(initContainers):
+            - securityContext:
+                readOnlyRootFilesystem: true
+            containers:
+            - securityContext:
+                readOnlyRootFilesystem: true

@@ -1,0 +1,32 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-aws-node-irsa
+  annotations:
+    policies.kyverno.io/title: Require aws-node DaemonSet use IRSA
+    policies.kyverno.io/category: AWS, EKS Best Practices
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: ServiceAccount
+    policies.kyverno.io/description: >-
+      This policy ensures that the aws-node ServiceAccount in the kube-system namespace
+      is configured with IRSA (IAM Roles for Service Accounts).
+spec:
+  validationFailureAction: audit
+  background: true
+  rules:
+    - name: validate-node-daemonset-irsa
+      match:
+        any:
+        - resources:
+            kinds:
+            - ServiceAccount
+            names:
+            - aws-node
+            namespaces:
+            - kube-system
+      validate:
+        message: "The aws-node ServiceAccount must be configured with IRSA (IAM Role for Service Accounts)"
+        pattern:
+          metadata:
+            annotations:
+              "eks.amazonaws.com/role-arn": "?*"

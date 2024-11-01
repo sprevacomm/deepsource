@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pod-1
+  namespace: dev
+  labels:
+    app: netpol-test
+spec:
+  containers:
+  - name: netcat
+  image: busybox
+  command: ['sleep', '3600']
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pod-2
+  namespace: default
+  labels:
+    app: netpol-test
+spec:
+  containers:
+  - name: netcat
+  image: busybox
+  command: ['sleep', '3600']

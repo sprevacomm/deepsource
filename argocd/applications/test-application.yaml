@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: test-application
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/IntelliBridge/rapid-cc-practice.git
+    targetRevision: "iac/RAPCON-302"
+    path: iac/modules/argocd/test-app/manifests
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: test-app
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

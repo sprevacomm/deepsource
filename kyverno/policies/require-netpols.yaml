@@ -1,0 +1,42 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-netpols
+  annotations:
+    policies.kyverno.io/title: "Require Network Policies"
+    policies.kyverno.io/category: "Network Security Standards"
+    policies.kyverno.io/severity: "high"
+    policies.kyverno.io/description: >-
+      Validates that namespaces have at least one NetworkPolicy defined to ensure 
+      network security controls are in place. This helps enforce zero-trust 
+      networking principles by requiring explicit network policies.
+    policies.kyverno.io/subject: "NetworkPolicy"
+    policies.kyverno.io/minversion: "1.13.0"
+    policies.kyverno.io/policyversion: "1.0.1"
+spec:
+  validationFailureAction: audit
+  background: true
+  rules:  
+    - name: check-networkpolicy-exists
+      match:
+        resources:
+          kinds:
+            - Namespace
+      exclude:
+        resources:
+          namespaces:
+            - kube-system
+            - amazon-cloudwatch
+            - cattle-provisioning-capi-system
+      context:
+        - name: networkPolicies
+          apiCall:
+            urlPath: "/apis/networking.k8s.io/v1/namespaces/{{request.object.metadata.name}}/networkpolicies"
+            jmesPath: "items"
+      validate:
+        message: "Each namespace must have at least one NetworkPolicy. Create a NetworkPolicy to define allowed network traffic."
+        deny:
+          conditions:
+            - key: "{{ networkPolicies }}"
+              operator: Equals
+              value: []

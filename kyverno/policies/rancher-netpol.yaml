@@ -1,0 +1,82 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: rancher-netpol
+  annotations:
+    policies.kyverno.io/title: "Rancher Management Network Policy"
+    policies.kyverno.io/category: "Network Policy"
+    policies.kyverno.io/severity: "high"
+    policies.kyverno.io/description: >-
+      Automatically generates a NetworkPolicy for the Rancher management system (cattle-system namespace). 
+      Controls ingress access through NGINX ingress controller for web UI and API access (ports 80/443). 
+      Manages egress for cluster management operations via kubelet (10250), Kubernetes API (6443), 
+      and HTTPS (443) to various system and application namespaces. Enables external API access for 
+      multi-cluster management and catalog operations. This policy is critical for secure cluster 
+      management operations while maintaining necessary access controls.
+    policies.kyverno.io/subject: "NetworkPolicy"
+    policies.kyverno.io/minversion: "1.13.0"
+    policies.kyverno.io/netpolversion: "1.0.1"
+spec:
+  rules:
+    - name: add-rancher-netpol
+      match:
+        any:
+        - resources:
+            kinds:
+              - Namespace
+      preconditions:
+        any:
+        - key: "{{request.object.metadata.name}}"
+          operator: Equals
+          value: "cattle-system"
+      generate:
+        generateExisting: true
+        apiVersion: networking.k8s.io/v1
+        kind: NetworkPolicy
+        name: rancher-netpol
+        namespace: "{{request.object.metadata.name}}"
+        synchronize: true
+        data:
+          spec:
+            podSelector: {}
+            policyTypes:
+              - Ingress
+              - Egress
+            ingress:
+              - from:
+                  - namespaceSelector:
+                      matchLabels:
+                        kubernetes.io/metadata.name: ingress-nginx
+                ports:
+                  - port: 80
+                    protocol: TCP
+                  - port: 443
+                    protocol: TCP
+            egress:
+              # Egress rule for cluster management
+              - ports:
+                  - port: 443
+                    protocol: TCP
+                  - port: 6443
+                    protocol: TCP
+                  - port: 10250
+                    protocol: TCP
+                to:
+                  - namespaceSelector:
+                      matchExpressions:
+                        - key: kubernetes.io/metadata.name
+                          operator: In
+                          values: 
+                            - default
+                            - cert-manager
+                            - ingress-nginx
+                            - dev
+                            - stage
+                            - prod
+              # Egress rule for external API access
+              - ports:
+                  - port: 443
+                    protocol: TCP
+                to:
+                  - ipBlock:
+                      cidr: 0.0.0.0/0

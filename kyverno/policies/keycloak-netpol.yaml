@@ -1,0 +1,73 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: keycloak-netpol
+  annotations:
+    policies.kyverno.io/title: "Keycloak Network Policy"
+    policies.kyverno.io/category: "Network Policy"
+    policies.kyverno.io/severity: "high"
+    policies.kyverno.io/description: >-
+      Automatically generates a NetworkPolicy for the Keycloak namespace. Controls ingress access 
+      for the authentication service, allowing traffic from the NGINX ingress controller and application 
+      namespaces (dev/stage/prod). Configures both HTTP (8080) and JGroups clustering (7800) ports. 
+      Permits all egress traffic as required for OIDC/OAuth flows and Keycloak operations. This policy 
+      is essential for secure identity and access management across the cluster.
+    policies.kyverno.io/subject: "NetworkPolicy"
+    policies.kyverno.io/minversion: "1.13.0"
+    policies.kyverno.io/netpolversion: "1.0.1"
+spec:
+  rules:
+    - name: add-keycloak-netpol
+      match:
+        any:
+        - resources:
+            kinds:
+              - Namespace
+      preconditions:
+        any:
+        - key: "{{request.object.metadata.name}}"
+          operator: Equals
+          value: "keycloak"
+      generate:
+        generateExisting: true
+        apiVersion: networking.k8s.io/v1
+        kind: NetworkPolicy
+        name: keycloak-netpol
+        namespace: "{{request.object.metadata.name}}"
+        synchronize: true
+        data:
+          spec:
+            podSelector:
+              matchLabels:
+                app.kubernetes.io/name: keycloak
+            policyTypes:
+              - Ingress
+              - Egress
+            ingress:
+              # Allow ingress controller
+              - ports:
+                  - port: 8080
+                    protocol: TCP
+                  - port: 7800  # JGroups port
+                    protocol: TCP
+                from:
+                  - namespaceSelector:
+                      matchLabels:
+                        kubernetes.io/metadata.name: ingress-nginx
+              # Allow application access
+              - ports:
+                  - port: 8080
+                    protocol: TCP
+                  - port: 7800  # JGroups port
+                    protocol: TCP
+                from:
+                  - namespaceSelector:
+                      matchExpressions:
+                        - key: kubernetes.io/metadata.name
+                          operator: In
+                          values: 
+                            - dev
+                            - stage
+                            - prod
+            egress:
+              - {}

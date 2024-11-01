@@ -1,0 +1,48 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: default-ns-netpol
+  annotations:
+    policies.kyverno.io/title: "Default Deny Network Policy"
+    policies.kyverno.io/category: "Network Policy"
+    policies.kyverno.io/severity: "high"
+    policies.kyverno.io/description: >-
+      Implements a zero-trust networking baseline by automatically generating default-deny NetworkPolicies 
+      for all namespaces except system namespaces (kube-system, amazon-cloudwatch, cattle-provisioning-capi-system). 
+      Explicitly blocks all ingress and egress traffic by default, requiring explicit allow rules to be added 
+      for desired communication paths.
+    policies.kyverno.io/subject: "NetworkPolicy"
+    policies.kyverno.io/minversion: "1.13.0"
+    policies.kyverno.io/netpolversion: "1.0.1"
+spec:
+  rules:
+    - name: add-baseline-netpol
+      match:
+        any:
+        - resources:
+            kinds:
+              - Namespace
+      preconditions:
+        any:
+        - key: "{{request.object.metadata.name}}"
+          operator: NotIn
+          value:
+            - kube-system
+            - amazon-cloudwatch
+            - cattle-provisioning-capi-system
+      generate:
+        generateExisting: true
+        apiVersion: networking.k8s.io/v1
+        kind: NetworkPolicy
+        name: default-deny-all-netpol
+        namespace: "{{request.object.metadata.name}}"
+        synchronize: true
+        data:
+          spec:
+            podSelector:
+              matchLabels: {}  # Explicitly match all pods
+            policyTypes:
+              - Ingress
+              - Egress
+            ingress: []  # Deny all ingress traffic
+            egress: []   # Deny all egress traffic

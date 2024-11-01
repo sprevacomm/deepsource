@@ -1,0 +1,39 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: restrict-image-repo
+  annotations:
+    policies.kyverno.io/title: "Restrict Image Registries"
+    policies.kyverno.io/category: "Image Security Standards"
+    policies.kyverno.io/severity: "high"
+    policies.kyverno.io/description: >-
+      Restricts container images to approved registries only to maintain control 
+      over image sources and reduce supply chain risks. This policy helps prevent 
+      the use of untrusted or compromised container images by enforcing 
+      organizational registry standards.
+    policies.kyverno.io/subject: "Pod"
+    policies.kyverno.io/minversion: "1.13.0"
+    policies.kyverno.io/policyversion: "1.0.1"
+spec:
+  validationFailureAction: audit
+  background: true
+  rules:
+    - name: validate-registries
+      match:
+        resources:
+          kinds:
+            - Pod
+            - Deployment
+            - StatefulSet
+            - DaemonSet
+            - Job
+            - CronJob
+      validate:
+        message: "Images must be from approved registries. Allowed registries: approved-registry.com, ecr.aws, gcr.io, docker.io/company"
+        pattern:
+          spec:
+            # Apply to init containers
+            =(initContainers):
+            - image: "{{ regex_match('approved-registry.com/*|*.ecr.aws/*|gcr.io/*|docker.io/company/*') }}"
+            containers:
+            - image: "{{ regex_match('approved-registry.com/*|*.ecr.aws/*|gcr.io/*|docker.io/company/*') }}"

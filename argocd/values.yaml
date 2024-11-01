@@ -1,0 +1,94 @@
+global:
+  domain: ${domain}
+
+server:
+  service:
+    port: 443
+    targetPort: 8080
+  ingress:
+    enabled: true
+    ingressClassName: "nginx"
+    hosts:
+      - ${domain}
+    annotations:
+      nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/ssl-passthrough: "true"
+      nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+    tls:
+      - hosts:
+          - ${domain}
+  config:
+    tls.crt: ""
+    tls.key: ""
+    resource.customizations: |
+      admissionregistration.k8s.io/MutatingWebhookConfiguration:
+        ignoreDifferences: |
+          jsonPointers:
+          - /webhooks/0/clientConfig/caBundle
+          - /webhooks/1/clientConfig/caBundle
+          - /webhooks/2/clientConfig/caBundle
+      admissionregistration.k8s.io/ValidatingWebhookConfiguration:
+        ignoreDifferences: |
+          jsonPointers:
+          - /webhooks/0/clientConfig/caBundle
+          - /webhooks/1/clientConfig/caBundle
+          - /webhooks/2/clientConfig/caBundle
+    url: https://${domain}
+    admin.enabled: "true"
+    admin.passwordMtime: "2024-01-01T00:00:00Z"
+  replicas: ${server_replicas}
+  resources:
+    limits:
+      cpu: ${server_resources.limits.cpu}
+      memory: ${server_resources.limits.memory}
+    requests:
+      cpu: ${server_resources.requests.cpu}
+      memory: ${server_resources.requests.memory}
+
+repoServer:
+  serviceAccount:
+    annotations:
+      eks.amazonaws.com/role-arn: ${argocd_role_arn}  
+  replicas: ${repo_server_replicas}
+  resources:
+    limits:
+      cpu: ${repo_server_resources.limits.cpu}
+      memory: ${repo_server_resources.limits.memory}
+    requests:
+      cpu: ${repo_server_resources.requests.cpu}
+      memory: ${repo_server_resources.requests.memory}
+
+applicationSet:
+  serviceAccount:
+    annotations:
+      eks.amazonaws.com/role-arn: ${argocd_role_arn}
+  replicas: ${applicationset_replicas}
+  resources:
+    limits:
+      cpu: ${applicationset_resources.limits.cpu}
+      memory: ${applicationset_resources.limits.memory}
+    requests:
+      cpu: ${applicationset_resources.requests.cpu}
+      memory: ${applicationset_resources.requests.memory}
+
+controller:
+  serviceAccount:
+    annotations:
+      eks.amazonaws.com/role-arn: ${argocd_role_arn}
+  replicas: ${controller_replicas}
+  resources:
+    limits:
+      cpu: ${controller_resources.limits.cpu}
+      memory: ${controller_resources.limits.memory}
+    requests:
+      cpu: ${controller_resources.requests.cpu}
+      memory: ${controller_resources.requests.memory}
+
+redis:
+  resources:
+    limits:
+      cpu: ${redis_resources.limits.cpu}
+      memory: ${redis_resources.limits.memory}
+    requests:
+      cpu: ${redis_resources.requests.cpu}
+      memory: ${redis_resources.requests.memory}

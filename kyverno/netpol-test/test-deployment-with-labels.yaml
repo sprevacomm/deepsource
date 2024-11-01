@@ -1,0 +1,22 @@
+#### test-deployment-with-labels.yaml ####
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-with-labels
+  labels:
+    app: nginx
+    environment: test
+    team: platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.14.2

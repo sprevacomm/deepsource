@@ -1,0 +1,24 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kyverno-policies
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/IntelliBridge/rapid-cc-practice.git
+    targetRevision: iac/RAPCON-302  # Spatnode security branch
+    path: iac/modules/kyverno/policies
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kyverno
+  syncPolicy:
+    automated:
+      prune: true  # Automatically delete resources that are no longer defined in remote repo
+      selfHeal: true  # Automatically sync if there's a difference between remote repo and live state
+    syncOptions:
+      - CreateNamespace=true  # Automatically create the kyverno namespace if it doesn't exist
+      - PruneLast=true  # Delete resources only after all other operations complete
+      - Replace=true

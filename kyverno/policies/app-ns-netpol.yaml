@@ -1,0 +1,102 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: app-ns-netpol
+  annotations:
+    policies.kyverno.io/title: "Application Namespace Network Policy"
+    policies.kyverno.io/category: "Network Policy"
+    policies.kyverno.io/severity: "high"
+    policies.kyverno.io/description: >-
+      Automatically generates a default NetworkPolicy for application namespaces (dev, stage, prod).
+      Controls ingress traffic from ingress-nginx and Jenkins, and manages egress to RDS, Redis, 
+      MSK, Keycloak, and AWS services.
+    policies.kyverno.io/subject: "NetworkPolicy"
+    policies.kyverno.io/minversion: "1.13.0"
+    policies.kyverno.io/netpolversion: "1.0.1"
+spec:
+  rules:
+    - name: add-app-netpol
+      match:
+        any:
+        - resources:
+            kinds:
+              - Namespace
+      preconditions:
+        any:
+        - key: "{{request.object.metadata.name}}"
+          operator: In
+          value: 
+            - dev
+            - stage
+            - prod
+      generate:
+        generateExisting: true
+        apiVersion: networking.k8s.io/v1
+        kind: NetworkPolicy
+        name: app-netpol
+        namespace: "{{request.object.metadata.name}}"
+        synchronize: true
+        data:
+          spec:
+            podSelector: {}
+            policyTypes:
+              - Ingress
+              - Egress
+            ingress:
+              # Only allow specific traffic from ingress-nginx
+              - from:
+                  - namespaceSelector:
+                      matchLabels:
+                        kubernetes.io/metadata.name: ingress-nginx
+                ports:
+                  - port: 80
+                    protocol: TCP
+                  - port: 443
+                    protocol: TCP
+              # Allow traffic from Jenkins
+              - from:
+                  - namespaceSelector:
+                      matchLabels:
+                        kubernetes.io/metadata.name: jenkins
+                ports:
+                  - port: 80
+                    protocol: TCP
+                  - port: 443
+                    protocol: TCP
+            egress:
+              # Allow RDS access
+              - ports:
+                  - port: 5432
+                    protocol: TCP
+                to:
+                  - ipBlock:
+                      cidr: 10.0.0.0/16
+              # Allow Redis access
+              - ports:
+                  - port: 6379
+                    protocol: TCP
+                to:
+                  - ipBlock:
+                      cidr: 10.0.0.0/16
+              # Allow MSK access
+              - ports:
+                  - port: 9092
+                    protocol: TCP
+                to:
+                  - ipBlock:
+                      cidr: 10.0.0.0/16
+              # Allow Keycloak access
+              - ports:
+                  - port: 8080
+                    protocol: TCP
+                to:
+                  - namespaceSelector:
+                      matchLabels:
+                        kubernetes.io/metadata.name: keycloak
+              # Allow AWS service endpoints
+              - ports:
+                  - port: 443
+                    protocol: TCP
+                to:
+                  - ipBlock:
+                      cidr: 0.0.0.0/0
